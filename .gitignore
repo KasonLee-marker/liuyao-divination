@@ -12,6 +12,10 @@ release/
 *.swp
 *.swo
 
+# Trae AI
+.trae/
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db

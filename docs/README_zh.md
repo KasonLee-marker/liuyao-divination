@@ -47,8 +47,8 @@ npm run build:win
 
 本应用支持基于Ollama的本地AI解读功能：
 
-1. 安装 [Ollama](https://ollama.ai)
-2. 运行 `ollama pull qwen2.5:7b`
+1. 安装 [Ollama](https://ollama.ai)（需要0.6及以上版本）
+2. 运行 `ollama pull huihui_ai/gemma3-abliterated:latest`
 3. 在设置中开启AI功能并选择模型
 
 ## 技术栈

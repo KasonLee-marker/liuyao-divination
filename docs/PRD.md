@@ -210,9 +210,10 @@
 | 项目 | 内容 |
 |------|------|
 | 下载地址 | https://ollama.ai |
-| 推荐模型 | qwen2.5:7b（中文友好，约4.7GB） |
+| 版本要求 | 0.6及以上 |
+| 推荐模型 | huihui_ai/gemma3-abliterated:latest（中文友好，效果更佳） |
 | 最低配置 | 8GB内存，10GB磁盘空间 |
-| 安装命令 | `ollama pull qwen2.5:7b` |
+| 安装命令 | `ollama pull huihui_ai/gemma3-abliterated:latest` |
 
 **技术实现要点：**
 

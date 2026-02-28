@@ -368,7 +368,7 @@ function coinsToYao(coins: CoinResult[]): Omit<Yao, 'position'> {
 | 模型服务 | Ollama (本地部署) |
 | API协议 | HTTP REST API |
 | 默认地址 | http://localhost:11434 |
-| 推荐模型 | qwen2.5:7b (中文友好) |
+| 推荐模型 | huihui_ai/gemma3-abliterated:latest |
 
 #### 3.4.2 数据结构
 

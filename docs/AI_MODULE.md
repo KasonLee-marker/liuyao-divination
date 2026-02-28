@@ -196,7 +196,7 @@ AI设置存储在SQLite数据库的settings表中：
 |-----|-------|
 | aiEnabled | 'true' / 'false' |
 | aiOllamaUrl | 'http://localhost:11434' |
-| aiModel | 'qwen2.5:7b' |
+| aiModel | 'huihui_ai/gemma3-abliterated:latest' |
 | aiTemperature | '0.7' |
 | aiMaxTokens | '1500' |
 

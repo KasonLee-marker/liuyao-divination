@@ -288,7 +288,7 @@ const modelCommand = computed(() => {
     case 'daocloud':
       return 'ollama run ollama.m.daocloud.io/library/qwen2.5:7b'
     default:
-      return 'ollama pull qwen2.5:7b'
+      return 'ollama pull huihui_ai/gemma3-abliterated:latest'
   }
 })
 

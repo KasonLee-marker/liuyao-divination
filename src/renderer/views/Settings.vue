@@ -346,16 +346,15 @@ async function handleRecheckOllama() {
     ollamaVersion.value = installStatus.version || ''
     ollamaRunning.value = installStatus.running
 
-    // 如果已安装但未运行，尝试启动
-    if (installStatus.installed && !installStatus.running) {
-      await window.electronAPI.ai.startOllama()
-      await new Promise(r => setTimeout(r, 2000))
+    // 如果服务正在运行，检查连接
+    if (installStatus.running) {
+      await settingsStore.checkOllama()
+      ollamaConnected.value = settingsStore.ollamaConnected
+      availableModels.value = settingsStore.availableModels
+    } else {
+      ollamaConnected.value = false
+      availableModels.value = []
     }
-
-    // 检查连接
-    await settingsStore.checkOllama()
-    ollamaConnected.value = settingsStore.ollamaConnected
-    availableModels.value = settingsStore.availableModels
 
     if (ollamaConnected.value) {
       ElMessage.success('Ollama连接成功')

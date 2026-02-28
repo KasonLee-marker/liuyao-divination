@@ -1,7 +1,13 @@
-import { ipcMain, dialog, app, BrowserWindow } from 'electron'
+import { ipcMain, dialog, app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
-import type { YaoType, DivinationResult, Hexagram } from '../../shared/types'
+import https from 'https'
+import http from 'http'
+import { exec, spawn } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
+import type { YaoType, DivinationResult, Hexagram, AISettings } from '../../shared/types'
 import {
   timeDivination,
   numberDivination,
@@ -30,6 +36,97 @@ import {
   getAllSettings
 } from '../database'
 import { getHexagramById } from '../../shared/data/hexagrams'
+
+async function checkOllamaConnection(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${url}/api/tags`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+// 检查 Ollama 是否已安装（Windows）
+async function checkOllamaInstalled(): Promise<{ installed: boolean; version?: string; path?: string }> {
+  try {
+    const { stdout } = await execAsync('where ollama', { timeout: 5000 })
+    const ollamaPath = stdout.trim().split('\n')[0]
+
+    // 尝试获取版本
+    try {
+      const { stdout: versionOut } = await execAsync('ollama --version', { timeout: 5000 })
+      const versionMatch = versionOut.match(/version[:\s]+([\d.]+)/i)
+      return {
+        installed: true,
+        version: versionMatch ? versionMatch[1] : 'unknown',
+        path: ollamaPath
+      }
+    } catch {
+      return { installed: true, path: ollamaPath }
+    }
+  } catch {
+    return { installed: false }
+  }
+}
+
+// 检查 Ollama 服务是否在运行
+async function checkOllamaRunning(): Promise<boolean> {
+  try {
+    const { stdout } = await execAsync('tasklist /FI "IMAGENAME eq ollama.exe"', { timeout: 5000 })
+    return stdout.toLowerCase().includes('ollama.exe')
+  } catch {
+    return false
+  }
+}
+
+async function getAvailableModels(url: string): Promise<{name: string}[]> {
+  try {
+    const response = await fetch(`${url}/api/tags`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(10000)
+    })
+    if (!response.ok) return []
+    const data = await response.json()
+    return data.models || []
+  } catch {
+    return []
+  }
+}
+
+function buildAIPrompt(
+  question: string | null,
+  originalHexagram: Hexagram,
+  changedHexagram: Hexagram | null,
+  movingYaoPositions: number[]
+): string {
+  const movingYaoText = movingYaoPositions.length > 0
+    ? movingYaoPositions.map(p => `第${p + 1}爻`).join('、')
+    : '无'
+
+  const changedHexagramText = changedHexagram
+    ? `${changedHexagram.name}（${changedHexagram.description || ''}）`
+    : '无变卦'
+
+  return `你是一位精通六爻预测的易学大师，请用通俗易懂的语言解读以下卦象。
+
+【用户问题】${question || '用户未提供具体问题，请给出一般性解读'}
+【本卦】${originalHexagram.name}：${originalHexagram.description || ''}
+【卦辞】${originalHexagram.guaci}
+【彖辞】${originalHexagram.tuanci}
+【象辞】${originalHexagram.xiangci}
+【变卦】${changedHexagramText}
+【动爻】${movingYaoText}
+
+请从以下角度解读：
+1. 这个卦象整体意味着什么？
+2. 针对用户的问题，有什么具体启示？
+3. 有什么建议和注意事项？
+
+请用白话文回答，避免使用专业术语，让普通人也能理解。回答控制在500字以内。`
+}
 
 export function registerIpcHandlers(): void {
   // Window controls
@@ -440,6 +537,355 @@ export function registerIpcHandlers(): void {
     }
 
     return { success: false }
+  })
+
+  ipcMain.handle('ai:checkOllama', async (_event, url: string) => {
+    const connected = await checkOllamaConnection(url)
+    if (connected) {
+      const models = await getAvailableModels(url)
+      return { connected: true, models }
+    }
+    return { connected: false, models: [] }
+  })
+
+  // 检查 Ollama 安装状态
+  ipcMain.handle('ai:checkOllamaInstalled', async () => {
+    const installStatus = await checkOllamaInstalled()
+    const running = await checkOllamaRunning()
+    return { ...installStatus, running }
+  })
+
+  // 启动 Ollama 服务
+  ipcMain.handle('ai:startOllama', async () => {
+    try {
+      // 检查是否已在运行
+      const running = await checkOllamaRunning()
+      if (running) {
+        return { success: true, message: 'Ollama 服务已在运行' }
+      }
+
+      // 后台启动 ollama serve
+      spawn('ollama', ['serve'], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      }).unref()
+
+      // 等待服务启动
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const nowRunning = await checkOllamaRunning()
+      return {
+        success: nowRunning,
+        message: nowRunning ? 'Ollama 服务已启动' : '启动服务失败，请手动运行 ollama serve'
+      }
+    } catch (error) {
+      return { success: false, message: `启动失败: ${error}` }
+    }
+  })
+
+  // 流式生成 AI 解读
+  ipcMain.handle('ai:generateStream', async (event, data: {
+    settings: AISettings
+    question: string | null
+    originalHexagram: Hexagram
+    changedHexagram: Hexagram | null
+    movingYaoPositions: number[]
+  }) => {
+    const { settings, question, originalHexagram, changedHexagram, movingYaoPositions } = data
+
+    // 验证必要参数
+    if (!settings.model) {
+      throw new Error('未选择AI模型，请前往设置选择模型')
+    }
+
+    if (!settings.ollamaUrl) {
+      throw new Error('未配置Ollama服务地址')
+    }
+
+    const prompt = buildAIPrompt(question, originalHexagram, changedHexagram, movingYaoPositions)
+    console.log('[AI] Starting stream generation with model:', settings.model)
+
+    try {
+      const response = await fetch(`${settings.ollamaUrl}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: settings.model,
+          prompt,
+          stream: true,
+          options: {
+            temperature: settings.temperature,
+            num_predict: settings.maxTokens
+          }
+        }),
+        signal: AbortSignal.timeout(180000) // 3分钟超时
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[AI] Ollama response error:', response.status, errorText)
+        throw new Error(`Ollama请求失败(${response.status}): ${errorText || '请检查模型是否正确'}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('无法读取响应流')
+      }
+
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          event.sender.send('ai:generateEnd')
+          break
+        }
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n').filter(line => line.trim())
+
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line)
+            if (json.response) {
+              event.sender.send('ai:generateChunk', json.response)
+            }
+            if (json.done) {
+              event.sender.send('ai:generateEnd')
+            }
+          } catch {
+            // Ignore parse errors for incomplete JSON
+          }
+        }
+      }
+
+      console.log('[AI] Stream generation complete')
+      return { success: true }
+    } catch (error) {
+      console.error('[AI] Stream generation failed:', error)
+      event.sender.send('ai:generateError', error instanceof Error ? error.message : '未知错误')
+      if (error instanceof Error) {
+        throw error
+      }
+      throw new Error('AI生成失败，请检查Ollama服务是否正常运行')
+    }
+  })
+
+  ipcMain.handle('ai:generate', async (_event, data: {
+    settings: AISettings
+    question: string | null
+    originalHexagram: Hexagram
+    changedHexagram: Hexagram | null
+    movingYaoPositions: number[]
+  }) => {
+    const { settings, question, originalHexagram, changedHexagram, movingYaoPositions } = data
+
+    // 验证必要参数
+    if (!settings.model) {
+      throw new Error('未选择AI模型，请前往设置选择模型')
+    }
+
+    if (!settings.ollamaUrl) {
+      throw new Error('未配置Ollama服务地址')
+    }
+
+    const prompt = buildAIPrompt(question, originalHexagram, changedHexagram, movingYaoPositions)
+    console.log('[AI] Generating interpretation with model:', settings.model)
+
+    try {
+      const response = await fetch(`${settings.ollamaUrl}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: settings.model,
+          prompt,
+          stream: false,
+          options: {
+            temperature: settings.temperature,
+            num_predict: settings.maxTokens
+          }
+        }),
+        signal: AbortSignal.timeout(120000)
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[AI] Ollama response error:', response.status, errorText)
+        throw new Error(`Ollama请求失败(${response.status}): ${errorText || '请检查模型是否正确'}`)
+      }
+
+      const result = await response.json()
+      console.log('[AI] Generation complete')
+      return result.response
+    } catch (error) {
+      console.error('[AI] Generation failed:', error)
+      if (error instanceof Error) {
+        throw error
+      }
+      throw new Error('AI生成失败，请检查Ollama服务是否正常运行')
+    }
+  })
+
+  ipcMain.handle('ai:downloadOllama', async (event, useMirror: boolean) => {
+    const mainWindow = BrowserWindow.fromWebContents(event.sender)
+
+    // 国内镜像源
+    const mirrors = [
+      'https://gh-proxy.com/https://github.com/ollama/ollama/releases/download/v0.5.7/OllamaSetup.exe'
+    ]
+
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow!, {
+      title: '保存Ollama安装程序',
+      defaultPath: 'OllamaSetup.exe',
+      filters: [
+        { name: '可执行文件', extensions: ['exe'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    })
+
+    if (canceled || !filePath) {
+      return { success: false, message: '用户取消下载' }
+    }
+
+    // 选择下载源
+    const downloadUrls = useMirror ? mirrors : ['https://ollama.com/download/OllamaSetup.exe']
+
+    return new Promise((resolve) => {
+      let currentIndex = 0
+
+      function tryDownload() {
+        if (currentIndex >= downloadUrls.length) {
+          resolve({ success: false, message: '所有下载源均失败，请检查网络或手动下载' })
+          return
+        }
+
+        const downloadUrl = downloadUrls[currentIndex]
+        const protocol = downloadUrl.startsWith('https') ? https : http
+
+        event.sender.send('ai:downloadProgress', {
+          progress: 0,
+          downloadedSize: 0,
+          totalSize: 0,
+          source: currentIndex + 1,
+          totalSources: downloadUrls.length
+        })
+
+        const request = protocol.get(downloadUrl, {
+          timeout: 30000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        }, (response) => {
+          // 处理重定向
+          if (response.statusCode === 302 || response.statusCode === 301) {
+            const redirectUrl = response.headers.location
+            if (redirectUrl) {
+              const redirectProtocol = redirectUrl.startsWith('https') ? https : http
+              redirectProtocol.get(redirectUrl, {
+                timeout: 30000,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+              }, handleResponse).on('error', handleError)
+              return
+            }
+          }
+          handleResponse(response)
+        })
+
+        function handleResponse(response: any) {
+          if (response.statusCode !== 200) {
+            currentIndex++
+            tryDownload()
+            return
+          }
+
+          const totalSize = parseInt(response.headers['content-length'] || '0', 10)
+          let downloadedSize = 0
+
+          const fileStream = fs.createWriteStream(filePath)
+
+          response.on('data', (chunk: Buffer) => {
+            downloadedSize += chunk.length
+            const progress = totalSize > 0 ? Math.round((downloadedSize / totalSize) * 100) : 0
+            event.sender.send('ai:downloadProgress', { progress, downloadedSize, totalSize })
+          })
+
+          response.pipe(fileStream)
+
+          fileStream.on('finish', () => {
+            fileStream.close()
+            resolve({ success: true, filePath, message: '下载完成' })
+          })
+
+          fileStream.on('error', (err) => {
+            fs.unlink(filePath, () => {})
+            resolve({ success: false, message: `保存失败: ${err.message}` })
+          })
+        }
+
+        function handleError(err: Error) {
+          console.error(`下载源 ${currentIndex + 1} 失败:`, err.message)
+          currentIndex++
+          if (currentIndex < downloadUrls.length) {
+            event.sender.send('ai:downloadProgress', {
+              progress: 0,
+              message: `切换到备用下载源...`
+            })
+          }
+          tryDownload()
+        }
+
+        request.on('error', handleError)
+        request.setTimeout(60000, () => {
+          request.destroy()
+          currentIndex++
+          tryDownload()
+        })
+      }
+
+      tryDownload()
+    })
+  })
+
+  // 静默安装 Ollama
+  ipcMain.handle('ai:installOllama', async (_event, installerPath: string) => {
+    try {
+      if (!fs.existsSync(installerPath)) {
+        return { success: false, message: '安装程序不存在' }
+      }
+
+      // 静默安装命令
+      const { stdout, stderr } = await execAsync(`"${installerPath}" /S`, {
+        timeout: 300000 // 5分钟超时
+      })
+
+      // 安装后刷新环境变量
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // 检查安装是否成功
+      const installStatus = await checkOllamaInstalled()
+
+      return {
+        success: installStatus.installed,
+        message: installStatus.installed ? '安装成功' : `安装可能失败: ${stderr || stdout}`,
+        path: installStatus.path
+      }
+    } catch (error) {
+      return { success: false, message: `安装失败: ${error}` }
+    }
+  })
+
+  // 打开下载页面
+  ipcMain.handle('ai:openDownloadPage', async (_event, useMirror: boolean) => {
+    const url = useMirror
+      ? 'https://github.com/ollama/ollama/releases'
+      : 'https://ollama.com/download/windows'
+    await shell.openExternal(url)
+    return { success: true }
   })
 }
 

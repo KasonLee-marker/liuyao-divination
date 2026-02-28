@@ -152,6 +152,84 @@ const electronAPI = {
       ipcRenderer.invoke('database:backup'),
     restore: (backupPath: string) =>
       ipcRenderer.invoke('database:restore', { backupPath })
+  },
+
+  ai: {
+    checkOllama: (url: string) =>
+      ipcRenderer.invoke('ai:checkOllama', url),
+    checkOllamaInstalled: () =>
+      ipcRenderer.invoke('ai:checkOllamaInstalled'),
+    startOllama: () =>
+      ipcRenderer.invoke('ai:startOllama'),
+    generate: (data: {
+      settings: {
+        enabled: boolean
+        ollamaUrl: string
+        model: string
+        temperature: number
+        maxTokens: number
+      }
+      question: string | null
+      originalHexagram: Hexagram
+      changedHexagram: Hexagram | null
+      movingYaoPositions: number[]
+    }) =>
+      ipcRenderer.invoke('ai:generate', data),
+    generateStream: (data: {
+      settings: {
+        enabled: boolean
+        ollamaUrl: string
+        model: string
+        temperature: number
+        maxTokens: number
+      }
+      question: string | null
+      originalHexagram: Hexagram
+      changedHexagram: Hexagram | null
+      movingYaoPositions: number[]
+    }, onChunk: (text: string) => void, onEnd: () => void, onError: (error: string) => void) => {
+      const chunkHandler = (_event: unknown, text: string) => onChunk(text)
+      const endHandler = () => {
+        ipcRenderer.removeListener('ai:generateChunk', chunkHandler)
+        ipcRenderer.removeListener('ai:generateEnd', endHandler)
+        ipcRenderer.removeListener('ai:generateError', errorHandler)
+        onEnd()
+      }
+      const errorHandler = (_event: unknown, error: string) => {
+        ipcRenderer.removeListener('ai:generateChunk', chunkHandler)
+        ipcRenderer.removeListener('ai:generateEnd', endHandler)
+        ipcRenderer.removeListener('ai:generateError', errorHandler)
+        onError(error)
+      }
+
+      ipcRenderer.on('ai:generateChunk', chunkHandler)
+      ipcRenderer.on('ai:generateEnd', endHandler)
+      ipcRenderer.on('ai:generateError', errorHandler)
+
+      // Start the stream generation
+      ipcRenderer.invoke('ai:generateStream', data).catch((err) => {
+        onError(err.message || '未知错误')
+      })
+
+      // Return cancel function
+      return () => {
+        ipcRenderer.removeListener('ai:generateChunk', chunkHandler)
+        ipcRenderer.removeListener('ai:generateEnd', endHandler)
+        ipcRenderer.removeListener('ai:generateError', errorHandler)
+      }
+    },
+    downloadOllama: (useMirror: boolean) =>
+      ipcRenderer.invoke('ai:downloadOllama', useMirror),
+    installOllama: (installerPath: string) =>
+      ipcRenderer.invoke('ai:installOllama', installerPath),
+    onDownloadProgress: (callback: (_event: unknown, data: { progress: number; downloadedSize: number; totalSize: number; message?: string }) => void) => {
+      ipcRenderer.on('ai:downloadProgress', callback)
+    },
+    removeDownloadProgressListener: (callback: (_event: unknown, data: { progress: number; downloadedSize: number; totalSize: number; message?: string }) => void) => {
+      ipcRenderer.removeListener('ai:downloadProgress', callback)
+    },
+    openDownloadPage: (useMirror: boolean) =>
+      ipcRenderer.invoke('ai:openDownloadPage', useMirror)
   }
 }
 

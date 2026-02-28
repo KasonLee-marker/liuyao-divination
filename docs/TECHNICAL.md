@@ -357,6 +357,103 @@ function coinsToYao(coins: CoinResult[]): Omit<Yao, 'position'> {
 }
 ```
 
+### 3.4 AI智能解卦模块
+
+#### 3.4.1 技术方案
+
+基于Ollama本地大语言模型实现AI智能解卦功能：
+
+| 项目 | 说明 |
+|------|------|
+| 模型服务 | Ollama (本地部署) |
+| API协议 | HTTP REST API |
+| 默认地址 | http://localhost:11434 |
+| 推荐模型 | qwen2.5:7b (中文友好) |
+
+#### 3.4.2 数据结构
+
+```typescript
+interface AISettings {
+  enabled: boolean
+  ollamaUrl: string
+  model: string
+  temperature: number
+  maxTokens: number
+}
+
+interface OllamaModel {
+  name: string
+  size: string
+  modified_at: string
+}
+```
+
+#### 3.4.3 核心实现
+
+```typescript
+// 检测Ollama服务
+async function checkOllamaConnection(url: string): Promise<boolean> {
+  const response = await fetch(`${url}/api/tags`, {
+    method: 'GET',
+    signal: AbortSignal.timeout(5000)
+  })
+  return response.ok
+}
+
+// 获取可用模型
+async function getAvailableModels(url: string): Promise<OllamaModel[]> {
+  const response = await fetch(`${url}/api/tags`)
+  const data = await response.json()
+  return data.models || []
+}
+
+// 生成AI解读（流式输出）
+async function generateAIInterpretation(
+  settings: AISettings,
+  question: string | null,
+  hexagram: Hexagram,
+  onProgress?: (text: string) => void
+): Promise<string> {
+  const response = await fetch(`${settings.ollamaUrl}/api/generate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      model: settings.model,
+      prompt: buildPrompt(question, hexagram),
+      stream: true,
+      options: {
+        temperature: settings.temperature,
+        num_predict: settings.maxTokens
+      }
+    })
+  })
+  
+  // 流式读取响应
+  const reader = response.body.getReader()
+  let fullText = ''
+  // ... 读取流并调用onProgress
+  return fullText
+}
+```
+
+#### 3.4.4 Prompt模板
+
+```typescript
+function buildPrompt(question: string, hexagram: Hexagram): string {
+  return `你是一位精通六爻预测的易学大师，请用通俗易懂的语言解读以下卦象。
+
+【用户问题】${question || '用户未提供具体问题，请给出一般性解读'}
+【本卦】${hexagram.name}：${hexagram.description}
+【卦辞】${hexagram.guaci}
+
+请从以下角度解读：
+1. 这个卦象整体意味着什么？
+2. 针对用户的问题，有什么具体启示？
+3. 有什么建议和注意事项？
+
+请用白话文回答，避免使用专业术语。`
+}
+```
+
 ---
 
 ## 4. 数据库设计

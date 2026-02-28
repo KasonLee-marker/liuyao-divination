@@ -5,7 +5,12 @@
       <h1 class="page-title">解卦结果</h1>
     </div>
 
-    <div v-if="!divinationStore.hasResult" class="empty-result">
+    <div v-if="isLoading" class="loading-container">
+      <el-icon class="is-loading" :size="40"><Loading /></el-icon>
+      <p>加载中...</p>
+    </div>
+
+    <div v-else-if="!divinationStore.hasResult" class="empty-result">
       <el-empty description="暂无卦象结果，请先起卦" />
       <el-button type="primary" @click="router.push('/')">去起卦</el-button>
     </div>
@@ -66,6 +71,59 @@
         </div>
       </el-card>
 
+      <el-card class="ai-interpretation-card" v-if="settingsStore.aiSettings.enabled">
+        <template #header>
+          <div class="card-header">
+            <span>AI智能解读</span>
+            <div class="ai-actions">
+              <el-button
+                v-if="aiLoading"
+                type="danger"
+                size="small"
+                @click="cancelAIInterpretation"
+              >
+                停止生成
+              </el-button>
+              <el-button
+                type="primary"
+                size="small"
+                @click="generateAIInterpretation"
+                :loading="aiLoading"
+                :disabled="!settingsStore.ollamaConnected || !settingsStore.aiSettings.model"
+              >
+                {{ aiInterpretation ? '重新解读' : 'AI解读' }}
+              </el-button>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="!settingsStore.ollamaConnected" class="ai-not-connected">
+          <el-alert type="warning" :closable="false">
+            未连接到Ollama服务，请前往设置检查AI配置
+          </el-alert>
+          <el-button type="primary" size="small" @click="router.push('/settings')" style="margin-top: 12px;">
+            前往设置
+          </el-button>
+        </div>
+
+        <div v-else-if="!settingsStore.aiSettings.model" class="ai-no-model">
+          <el-alert type="info" :closable="false">
+            请先在设置中选择AI模型
+          </el-alert>
+        </div>
+
+        <div v-else-if="aiInterpretation || aiLoading" class="ai-content">
+          <AIInterpretation
+            :full-text="aiInterpretation"
+            :is-generating="aiLoading"
+          />
+        </div>
+
+        <div v-else class="ai-placeholder">
+          <p>点击"AI解读"按钮，获取针对您问题的智能解读</p>
+        </div>
+      </el-card>
+
       <el-card class="info-card" v-if="result?.ganZhi || result?.lunarDate">
         <template #header>
           <span>起卦信息</span>
@@ -106,18 +164,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { ArrowLeft, Loading } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useDivinationStore } from '../stores/divination'
+import { useSettingsStore } from '../stores/settings'
 import HexagramDisplay from '../components/HexagramDisplay.vue'
+import AIInterpretation from '../components/AIInterpretation.vue'
 import { formatLunarDate as formatLunar } from '@shared/utils/calendar'
 
 const router = useRouter()
+const route = useRoute()
 const divinationStore = useDivinationStore()
+const settingsStore = useSettingsStore()
 
 const result = computed(() => divinationStore.currentResult)
 const remark = ref('')
+const aiInterpretation = ref('')
+const aiLoading = ref(false)
+const isLoading = ref(false)
+let cancelStream: (() => void) | null = null
 
 const methodLabel = computed(() => {
   const labels: Record<string, string> = {
@@ -144,6 +211,61 @@ function formatLunarDate(lunar: { year: number; month: number; day: number; isLe
   return formatLunar(lunar as Parameters<typeof formatLunar>[0])
 }
 
+async function generateAIInterpretation() {
+  if (!result.value) return
+
+  // Cancel any existing stream
+  if (cancelStream) {
+    cancelStream()
+    cancelStream = null
+  }
+
+  aiLoading.value = true
+  aiInterpretation.value = ''
+
+  try {
+    // 确保设置是最新的
+    await settingsStore.loadSettings()
+
+    // 检查模型是否已选择
+    if (!settingsStore.aiSettings.model) {
+      ElMessage.warning('请先在设置中选择AI模型')
+      return
+    }
+
+    // 将 reactive 对象转换为普通对象，以便 IPC 序列化
+    cancelStream = window.electronAPI.ai.generateStream(
+      {
+        settings: JSON.parse(JSON.stringify(settingsStore.aiSettings)),
+        question: result.value.question,
+        originalHexagram: JSON.parse(JSON.stringify(result.value.originalHexagram)),
+        changedHexagram: result.value.changedHexagram ? JSON.parse(JSON.stringify(result.value.changedHexagram)) : null,
+        movingYaoPositions: [...result.value.movingYaoPositions]
+      },
+      // onChunk
+      (text: string) => {
+        aiInterpretation.value += text
+      },
+      // onEnd
+      () => {
+        aiLoading.value = false
+        cancelStream = null
+      },
+      // onError
+      (error: string) => {
+        aiLoading.value = false
+        cancelStream = null
+        ElMessage.error(`AI解读失败: ${error}`)
+      }
+    )
+  } catch (error) {
+    console.error('AI interpretation failed:', error)
+    const errorMsg = error instanceof Error ? error.message : '未知错误'
+    ElMessage.error(`AI解读失败: ${errorMsg}`)
+    aiLoading.value = false
+  }
+}
+
 async function saveRemark() {
   if (result.value && remark.value !== result.value.remark) {
     try {
@@ -157,9 +279,114 @@ async function saveRemark() {
   }
 }
 
-onMounted(() => {
-  if (result.value) {
+function cancelAIInterpretation() {
+  if (cancelStream) {
+    cancelStream()
+    cancelStream = null
+    aiLoading.value = false
+    ElMessage.info('已停止生成')
+  }
+}
+
+async function loadHistoryRecord(id: string) {
+  isLoading.value = true
+  try {
+    const record = await window.electronAPI.history.get(id)
+    if (record) {
+      // 获取完整的卦象数据
+      const originalHexagram = await window.electronAPI.hexagram.get(record.originalHexagramId)
+      let changedHexagram = null
+      if (record.changedHexagramId) {
+        changedHexagram = await window.electronAPI.hexagram.get(record.changedHexagramId)
+      }
+
+      // 解析 JSON 字符串
+      let lunarDate = null
+      let ganZhi = null
+      let timeInfo = null
+      let coinResults = null
+      let inputNumbers = null
+
+      if (record.lunarDate) {
+        try {
+          lunarDate = JSON.parse(record.lunarDate)
+        } catch { /* ignore */ }
+      }
+      if (record.ganZhi) {
+        try {
+          ganZhi = JSON.parse(record.ganZhi)
+        } catch { /* ignore */ }
+      }
+      if (record.timeInfo) {
+        try {
+          timeInfo = JSON.parse(record.timeInfo)
+        } catch { /* ignore */ }
+      }
+      if (record.coinResults) {
+        try {
+          coinResults = JSON.parse(record.coinResults)
+        } catch { /* ignore */ }
+      }
+      if (record.inputNumbers) {
+        try {
+          inputNumbers = JSON.parse(record.inputNumbers)
+        } catch { /* ignore */ }
+      }
+
+      // 构建完整的 DivinationResult
+      divinationStore.currentResult = {
+        id: record.id,
+        createdAt: new Date(record.createdAt),
+        method: record.method,
+        originalHexagram,
+        changedHexagram,
+        movingYaoPositions: record.movingYaoPositions,
+        question: record.question,
+        remark: record.remark,
+        coinResults,
+        inputNumbers,
+        timeInfo,
+        lunarDate,
+        ganZhi
+      }
+      remark.value = record.remark || ''
+    } else {
+      ElMessage.error('未找到该记录')
+      router.push('/history')
+    }
+  } catch (e) {
+    console.error('Failed to load history record:', e)
+    ElMessage.error('加载记录失败')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  await settingsStore.loadSettings()
+  if (settingsStore.aiSettings.enabled) {
+    await settingsStore.checkOllama()
+  }
+
+  const id = route.params.id as string
+  if (id) {
+    await loadHistoryRecord(id)
+  } else if (result.value) {
     remark.value = result.value.remark || ''
+  }
+})
+
+onUnmounted(() => {
+  // Cancel any ongoing stream when component is destroyed
+  if (cancelStream) {
+    cancelStream()
+    cancelStream = null
+  }
+})
+
+watch(() => route.params.id, async (newId) => {
+  if (newId) {
+    await loadHistoryRecord(newId as string)
   }
 })
 </script>
@@ -182,6 +409,16 @@ onMounted(() => {
   padding: 60px 0;
 }
 
+.loading-container {
+  text-align: center;
+  padding: 60px 0;
+  color: var(--el-text-color-secondary);
+}
+
+.loading-container p {
+  margin-top: 16px;
+}
+
 .hexagram-card {
   margin-bottom: 24px;
 }
@@ -194,7 +431,8 @@ onMounted(() => {
 
 .interpretation-card,
 .info-card,
-.remark-card {
+.remark-card,
+.ai-interpretation-card {
   margin-bottom: 24px;
 }
 
@@ -214,5 +452,27 @@ onMounted(() => {
   color: var(--el-text-color-primary);
   line-height: 1.8;
   text-indent: 2em;
+}
+
+.ai-not-connected,
+.ai-no-model,
+.ai-placeholder {
+  text-align: center;
+  padding: 20px;
+  color: var(--el-text-color-secondary);
+}
+
+.ai-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-content {
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.ai-content p {
+  margin: 0;
 }
 </style>

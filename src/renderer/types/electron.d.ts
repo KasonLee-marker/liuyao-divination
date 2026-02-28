@@ -4,7 +4,8 @@ import type {
   HistoryRecord,
   LunarDate,
   GanZhi,
-  Hexagram
+  Hexagram,
+  AISettings
 } from '@shared/types'
 
 declare global {
@@ -108,6 +109,55 @@ declare global {
         restore: (backupPath: string) => Promise<{
           success: boolean
         }>
+      }
+      // AI相关
+      ai: {
+        checkOllama: (url: string) => Promise<{
+          connected: boolean
+          models: Array<{ name: string }>
+        }>
+        checkOllamaInstalled: () => Promise<{
+          installed: boolean
+          version?: string
+          path?: string
+          running: boolean
+        }>
+        startOllama: () => Promise<{
+          success: boolean
+          message: string
+        }>
+        generate: (data: {
+          settings: AISettings
+          question: string | null
+          originalHexagram: Hexagram
+          changedHexagram: Hexagram | null
+          movingYaoPositions: number[]
+        }) => Promise<string>
+        generateStream: (
+          data: {
+            settings: AISettings
+            question: string | null
+            originalHexagram: Hexagram
+            changedHexagram: Hexagram | null
+            movingYaoPositions: number[]
+          },
+          onChunk: (text: string) => void,
+          onEnd: () => void,
+          onError: (error: string) => void
+        ) => () => void
+        downloadOllama: (useMirror: boolean) => Promise<{
+          success: boolean
+          filePath?: string
+          message: string
+        }>
+        installOllama: (installerPath: string) => Promise<{
+          success: boolean
+          message: string
+          path?: string
+        }>
+        onDownloadProgress: (callback: (_event: unknown, data: { progress: number; downloadedSize: number; totalSize: number; message?: string }) => void) => void
+        removeDownloadProgressListener: (callback: (_event: unknown, data: { progress: number; downloadedSize: number; totalSize: number; message?: string }) => void) => void
+        openDownloadPage: (useMirror: boolean) => Promise<{ success: boolean }>
       }
     }
   }

@@ -123,3 +123,30 @@ export interface AppSettings {
   autoSave: boolean
   defaultMethod: DivinationMethod
 }
+
+export interface AISettings {
+  enabled: boolean
+  ollamaUrl: string
+  model: string
+  temperature: number
+  maxTokens: number
+}
+
+export interface OllamaModel {
+  name: string
+  size?: string
+  modified_at?: string
+}
+
+export interface OllamaResponse {
+  model: string
+  response: string
+  done: boolean
+}
+
+export interface AIInterpretationRequest {
+  question: string | null
+  originalHexagram: Hexagram
+  changedHexagram: Hexagram | null
+  movingYaoPositions: number[]
+}

@@ -41,6 +41,8 @@
     "electron-builder": "^24.13.3",
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.22.0",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
     "typescript": "^5.3.3",
     "vite": "^5.1.4",
     "vitest": "^1.3.1",
@@ -49,7 +51,7 @@
   },
   "build": {
     "appId": "com.liuyao.app",
-    "productName": "六爻预测",
+    "productName": "LiuYao-Divination",
     "directories": {
       "output": "release/${version}"
     },
@@ -67,7 +69,8 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
   }
 }

@@ -20,10 +20,24 @@ npm install
 
 # 开发模式（推荐）
 npm run dev:full
+```
 
-# 构建Windows安装包
+## 构建发布
+
+```bash
+# 1. 终止占用进程
+taskkill /F /IM "LiuYao-Divination.exe" 2>$null
+taskkill /F /IM "electron.exe" 2>$null
+
+# 2. 清理旧构建
+Remove-Item -Path "release" -Recurse -Force -ErrorAction SilentlyContinue
+
+# 3. 以管理员权限打包
 npm run build:win
 ```
+
+**输出文件：**
+- `release/{version}/LiuYao-Divination-{version}-x64.exe` - 便携版，双击运行
 
 ## AI智能解卦（可选）
 

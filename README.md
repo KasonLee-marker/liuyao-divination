@@ -1,103 +1,107 @@
-# 六爻预测App
+# LiuYao Divination
 
-基于传统六爻理论的桌面预测应用 | Electron + Vue 3 + TypeScript + SQLite
+[中文](README_zh.md) | English
 
-## 功能概览
+A desktop application for Liu Yao (Six Lines) divination prediction based on traditional Chinese I Ching theory.
 
-| 模块 | 功能 |
-|------|------|
-| 起卦 | 时间起卦、数字起卦、铜钱起卦、手动起卦 |
-| 解卦 | 卦象展示、卦辞解读、AI智能解读（可选） |
-| 历史 | 记录保存、搜索筛选、导出备份 |
-| 知识库 | 六十四卦详解、八卦基础、起卦方法 |
-| 设置 | 主题、字体、AI配置、数据管理 |
+**Tech Stack:** Electron + Vue 3 + TypeScript + SQLite
 
-## 快速开始
+## Features
+
+| Module | Features |
+|--------|----------|
+| Divination | Time-based, Number-based, Coin-tossing, Manual input |
+| Interpretation | Hexagram display, Text interpretation, AI interpretation (optional) |
+| History | Record saving, Search & filter, Export & backup |
+| Knowledge Base | 64 Hexagrams guide, Bagua basics, Divination methods |
+| Settings | Theme, Font, AI configuration, Data management |
+
+## Quick Start
 
 ```bash
-# 安装依赖
+# Install dependencies
 npm install
 
-# 开发模式（推荐）
+# Development mode (recommended)
 npm run dev:full
 ```
 
-## 构建发布
+## Build & Release
 
 ```bash
-# 1. 终止占用进程
+# 1. Kill running processes
 taskkill /F /IM "LiuYao-Divination.exe" 2>$null
 taskkill /F /IM "electron.exe" 2>$null
 
-# 2. 清理旧构建
+# 2. Clean old builds
 Remove-Item -Path "release" -Recurse -Force -ErrorAction SilentlyContinue
 
-# 3. 以管理员权限打包
+# 3. Build with admin privileges
 npm run build:win
 ```
 
-**输出文件：**
-- `release/{version}/LiuYao-Divination-{version}-x64.exe` - 便携版，双击运行
+**Output:**
+- `release/{version}/LiuYao-Divination-{version}-x64.exe` - Portable version, double-click to run
 
-## AI智能解卦（可选）
+## AI Interpretation (Optional)
 
-本应用支持基于Ollama的本地AI解读功能：
+This app supports local AI interpretation based on Ollama:
 
-1. 安装 [Ollama](https://ollama.ai)
-2. 运行 `ollama pull qwen2.5:7b`
-3. 在设置中开启AI功能并选择模型
+1. Install [Ollama](https://ollama.ai)
+2. Run `ollama pull qwen2.5:7b`
+3. Enable AI feature in Settings and select model
 
-## 技术栈
+## Tech Stack
 
 Electron 29 | Vue 3 | Element Plus | Pinia | SQLite | TypeScript | Vite
 
-## 项目结构
+## Project Structure
 
 ```
 src/
-├── main/           # Electron主进程
-├── renderer/       # Vue 3前端
-└── shared/         # 共享代码（类型、工具、数据）
+├── main/           # Electron main process
+├── renderer/       # Vue 3 frontend
+└── shared/         # Shared code (types, utils, data)
 ```
 
-详细文档见 [docs/](docs/) 目录。
+See [docs/](docs/) for detailed documentation.
 
-## 更新日志
+## Changelog
 
 ### v1.2.2 (2026-02-28)
-- ✨ AI解读内容自动保存到历史记录
-- 🎨 历史记录列表显示"AI解读"标签
-- 🎨 优化AI解读提示词，提供更详细的卦象分析
-- 🐛 修复打包后白屏问题（资源路径修正）
-- 🎨 更新构建流程，添加进程清理步骤
+- AI interpretation auto-saved to history
+- "AI Interpretation" tag displayed in history list
+- Optimized AI prompt for more detailed analysis
+- Fixed white screen after build (resource path correction)
+- Updated build process with process cleanup
 
 ### v1.2.1 (2026-02-28)
-- 🎨 优化Ollama下载镜像源，移除失效镜像
-- 🎨 默认使用Cloudflare镜像加速模型下载
+- Optimized Ollama download mirror sources
+- Default to Cloudflare mirror for faster model download
 
 ### v1.2.0 (2026-02-28)
-- ✨ AI解读支持流式输出，实时显示生成内容
-- ✨ 支持DeepSeek-R1等模型的思考过程展示（`<think>` 标签解析）
-- ✨ 思考过程以可折叠区域显示，使用小字体区分
-- ✨ AI解读内容支持Markdown渲染（标题、列表、代码块等）
-- ✨ 新增"停止生成"按钮，可随时取消AI解读
-- 🎨 生成中显示光标动画效果
+- AI interpretation with streaming output
+- Support for DeepSeek-R1 thinking process display
+- Collapsible thinking section with smaller font
+- Markdown rendering for AI interpretation
+- "Stop Generation" button to cancel anytime
+- Cursor animation during generation
 
 ### v1.1.0 (2026-02-28)
-- ✨ 新增AI智能解卦功能（基于Ollama本地模型）
-- ✨ 新增AI设置页面（模型选择、温度、字数控制）
-- 🎨 实现原生窗口外观（无边框+自定义标题栏）
-- � 修复农历日期显示undefined的问题
-- 🐛 修复菜单导航和日期选择器无响应问题
+- AI-powered interpretation (based on Ollama local model)
+- AI settings page (model selection, temperature, max tokens)
+- Native window appearance (frameless + custom title bar)
+- Fixed lunar date display undefined issue
+- Fixed menu navigation and date picker not responding
 
 ### v1.0.0 (2026-02-27)
-- ✅ 四种起卦方式
-- ✅ 完整解卦功能
-- ✅ 历史记录管理
-- ✅ 知识库查询
-- ✅ 系统设置
-- ✅ 数据导出备份
+- Four divination methods
+- Complete interpretation functionality
+- History management
+- Knowledge base query
+- System settings
+- Data export & backup
 
 ## License
 
-仅供学习研究使用。
+For educational and research purposes only.

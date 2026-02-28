@@ -10,6 +10,7 @@ export const useHistoryStore = defineStore('history', () => {
     changedHexagramId: number | null
     movingYaoPositions: number[]
     question: string | null
+    aiInterpretation?: string | null
   }>>([])
   
   const total = ref(0)

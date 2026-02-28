@@ -30,9 +30,14 @@
           <p class="question" v-if="record.question">{{ record.question }}</p>
           <p class="date">{{ formatDate(record.createdAt) }}</p>
         </div>
-        <div class="history-item-actions">
-          <el-button type="primary" link @click.stop="viewDetail(record)">查看详情</el-button>
-          <el-button type="danger" link @click.stop="handleDelete(record.id)">删除</el-button>
+        <div class="history-item-footer">
+          <el-tag v-if="record.aiInterpretation" type="success" size="small" effect="plain">
+            AI解读
+          </el-tag>
+          <div class="history-item-actions">
+            <el-button type="primary" link @click.stop="viewDetail(record)">查看详情</el-button>
+            <el-button type="danger" link @click.stop="handleDelete(record.id)">删除</el-button>
+          </div>
         </div>
       </el-card>
     </div>
@@ -199,6 +204,12 @@ onMounted(() => {
 
 .history-item-content {
   margin-bottom: 12px;
+}
+
+.history-item-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .question {

@@ -247,9 +247,20 @@ async function generateAIInterpretation() {
         aiInterpretation.value += text
       },
       // onEnd
-      () => {
+      async () => {
         aiLoading.value = false
         cancelStream = null
+        // 保存AI解读到历史记录
+        if (result.value?.id && aiInterpretation.value) {
+          try {
+            await window.electronAPI.history.update({
+              id: result.value.id,
+              aiInterpretation: aiInterpretation.value
+            })
+          } catch (e) {
+            console.error('Failed to save AI interpretation:', e)
+          }
+        }
       },
       // onError
       (error: string) => {
@@ -350,6 +361,7 @@ async function loadHistoryRecord(id: string) {
         ganZhi
       }
       remark.value = record.remark || ''
+      aiInterpretation.value = record.aiInterpretation || ''
     } else {
       ElMessage.error('未找到该记录')
       router.push('/history')

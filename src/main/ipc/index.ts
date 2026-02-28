@@ -110,22 +110,80 @@ function buildAIPrompt(
     ? `${changedHexagram.name}（${changedHexagram.description || ''}）`
     : '无变卦'
 
-  return `你是一位精通六爻预测的易学大师，请用通俗易懂的语言解读以下卦象。
+  // 构建爻辞信息
+  let yaociText = ''
+  if (originalHexagram.yaoci && originalHexagram.yaoci.length > 0) {
+    yaociText = '\n【爻辞】\n' + originalHexagram.yaoci.map(y => {
+      const isMoving = movingYaoPositions.includes(y.position)
+      return `${isMoving ? '【动爻】' : ''}第${y.position + 1}爻：${y.content}${y.interpretation ? `（${y.interpretation}）` : ''}`
+    }).join('\n')
+  }
+
+  // 构建动爻爻辞
+  let movingYaociText = ''
+  if (movingYaoPositions.length > 0 && originalHexagram.yaoci) {
+    const movingYaoCi = movingYaoPositions.map(pos => {
+      const yao = originalHexagram.yaoci?.find(y => y.position === pos)
+      return yao ? `第${pos + 1}爻：${yao.content}` : ''
+    }).filter(Boolean).join('\n')
+    if (movingYaoCi) {
+      movingYaociText = `\n【动爻爻辞】\n${movingYaoCi}`
+    }
+  }
+
+  // 构建纳甲六亲信息
+  let najiaText = ''
+  if (originalHexagram.najia && originalHexagram.najia.length > 0) {
+    najiaText = '\n【纳甲六亲】\n' + originalHexagram.najia.map(n => {
+      const isMoving = movingYaoPositions.includes(n.position)
+      return `${isMoving ? '【动爻】' : ''}第${n.position + 1}爻：${n.tiangan}${n.dizhi}（${n.wuxing}）${n.liuqin ? ` - ${n.liuqin}` : ''}`
+    }).join('\n')
+  }
+
+  // 五行属性
+  const wuxingText = originalHexagram.wuxing ? `\n【五行属性】${originalHexagram.wuxing}` : ''
+  
+  // 宫位
+  const palaceText = originalHexagram.palace ? `\n【所属宫】${originalHexagram.palace}` : ''
+
+  return `你是一位精通六爻预测的易学大师，请根据以下卦象信息，为用户提供详细、具体的解读。
 
 【用户问题】${question || '用户未提供具体问题，请给出一般性解读'}
-【本卦】${originalHexagram.name}：${originalHexagram.description || ''}
+
+【本卦】${originalHexagram.name}
 【卦辞】${originalHexagram.guaci}
 【彖辞】${originalHexagram.tuanci}
-【象辞】${originalHexagram.xiangci}
+【象辞】${originalHexagram.xiangci}${wuxingText}${palaceText}${yaociText}${najiaText}${movingYaociText}
+
 【变卦】${changedHexagramText}
-【动爻】${movingYaoText}
+【动爻位置】${movingYaoText}
 
-请从以下角度解读：
-1. 这个卦象整体意味着什么？
-2. 针对用户的问题，有什么具体启示？
-3. 有什么建议和注意事项？
+请按以下结构进行详细解读：
 
-请用白话文回答，避免使用专业术语，让普通人也能理解。回答控制在500字以内。`
+一、卦象总览
+- 解释本卦的基本含义和象征
+- 如有变卦，说明本卦变变卦的含义变化
+- 动爻对整体卦象的影响
+
+二、针对问题分析
+- 结合用户所问事项，分析卦象的吉凶趋势
+- 动爻爻辞的具体启示
+- 纳甲六亲与所问事项的关联（如财爻、官爻、父母爻等）
+
+三、时间与方位提示
+- 根据卦象五行，推断有利的时间（如季节、月份）
+- 有利的方位提示
+
+四、建议与注意事项
+- 具体的行动建议
+- 需要避免的事项
+- 人际关系方面的提示
+
+五、总结
+- 核心结论（吉/凶/平）
+- 关键要点提示
+
+请用通俗易懂的白话文回答，避免过多专业术语，让普通人也能理解。回答要具体、有针对性，不要泛泛而谈。`
 }
 
 export function registerIpcHandlers(): void {
@@ -289,7 +347,7 @@ export function registerIpcHandlers(): void {
     return { success: true }
   })
 
-  ipcMain.handle('history:update', async (_event, data: { id: string; question?: string; remark?: string }) => {
+  ipcMain.handle('history:update', async (_event, data: { id: string; question?: string; remark?: string; aiInterpretation?: string }) => {
     updateHistory(data.id, data)
     return { success: true }
   })

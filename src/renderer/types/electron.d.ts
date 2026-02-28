@@ -53,6 +53,7 @@ declare global {
           id: string
           question?: string
           remark?: string
+          aiInterpretation?: string
         }) => Promise<{ success: boolean }>
         delete: (id: string) => Promise<{ success: boolean }>
         search: (keyword: string) => Promise<Array<HistoryRecord>>

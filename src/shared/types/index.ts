@@ -114,6 +114,7 @@ export interface HistoryRecord {
   timeInfo: string | null
   lunarDate: string | null
   ganZhi: string | null
+  aiInterpretation: string | null
 }
 
 export interface AppSettings {

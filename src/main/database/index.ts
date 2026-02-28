@@ -44,7 +44,8 @@ function createTables(): void {
       input_numbers TEXT,
       time_info TEXT,
       lunar_date TEXT,
-      gan_zhi TEXT
+      gan_zhi TEXT,
+      ai_interpretation TEXT
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -56,6 +57,12 @@ function createTables(): void {
     CREATE INDEX IF NOT EXISTS idx_history_created_at ON history(created_at);
     CREATE INDEX IF NOT EXISTS idx_history_method ON history(method);
   `)
+  
+  try {
+    db.exec(`ALTER TABLE history ADD COLUMN ai_interpretation TEXT`)
+  } catch {
+    // Column already exists, ignore
+  }
 }
 
 function seedData(): void {
@@ -92,6 +99,7 @@ export function saveHistory(record: {
   timeInfo: string | null
   lunarDate: string | null
   ganZhi: string | null
+  aiInterpretation?: string | null
 }): void {
   const db = getDatabase()
   
@@ -99,8 +107,8 @@ export function saveHistory(record: {
     INSERT INTO history (
       id, created_at, method, original_hexagram_id, changed_hexagram_id,
       moving_yao_positions, question, remark, coin_results, input_numbers,
-      time_info, lunar_date, gan_zhi
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      time_info, lunar_date, gan_zhi, ai_interpretation
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   
   stmt.run(
@@ -116,7 +124,8 @@ export function saveHistory(record: {
     record.inputNumbers,
     record.timeInfo,
     record.lunarDate,
-    record.ganZhi
+    record.ganZhi,
+    record.aiInterpretation ?? null
   )
 }
 
@@ -132,6 +141,7 @@ export function getHistoryList(options?: {
   changedHexagramId: number | null
   movingYaoPositions: number[]
   question: string | null
+  aiInterpretation: string | null
 }> {
   const db = getDatabase()
   
@@ -164,6 +174,7 @@ export function getHistoryList(options?: {
     changed_hexagram_id: number | null
     moving_yao_positions: string
     question: string | null
+    ai_interpretation: string | null
   }>
   
   return rows.map(row => ({
@@ -173,7 +184,8 @@ export function getHistoryList(options?: {
     originalHexagramId: row.original_hexagram_id,
     changedHexagramId: row.changed_hexagram_id,
     movingYaoPositions: JSON.parse(row.moving_yao_positions),
-    question: row.question
+    question: row.question,
+    aiInterpretation: row.ai_interpretation
   }))
 }
 
@@ -192,6 +204,7 @@ export function getHistoryById(id: string): {
   timeInfo: string | null
   lunarDate: string | null
   ganZhi: string | null
+  aiInterpretation: string | null
 } | null {
   const db = getDatabase()
   
@@ -211,6 +224,7 @@ export function getHistoryById(id: string): {
     time_info: string | null
     lunar_date: string | null
     gan_zhi: string | null
+    ai_interpretation: string | null
   } | undefined
   
   if (!row) return null
@@ -229,13 +243,15 @@ export function getHistoryById(id: string): {
     inputNumbers: row.input_numbers,
     timeInfo: row.time_info,
     lunarDate: row.lunar_date,
-    ganZhi: row.gan_zhi
+    ganZhi: row.gan_zhi,
+    aiInterpretation: row.ai_interpretation
   }
 }
 
 export function updateHistory(id: string, updates: {
   question?: string
   remark?: string
+  aiInterpretation?: string
 }): void {
   const db = getDatabase()
   
@@ -243,11 +259,12 @@ export function updateHistory(id: string, updates: {
     UPDATE history 
     SET question = COALESCE(?, question),
         remark = COALESCE(?, remark),
+        ai_interpretation = COALESCE(?, ai_interpretation),
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `)
   
-  stmt.run(updates.question ?? null, updates.remark ?? null, id)
+  stmt.run(updates.question ?? null, updates.remark ?? null, updates.aiInterpretation ?? null, id)
 }
 
 export function deleteHistory(id: string): void {

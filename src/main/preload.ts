@@ -103,7 +103,7 @@ const electronAPI = {
       ipcRenderer.invoke('history:get', id),
     save: (data: DivinationResult) =>
       ipcRenderer.invoke('history:save', data),
-    update: (data: { id: string; question?: string; remark?: string }) =>
+    update: (data: { id: string; question?: string; remark?: string; aiInterpretation?: string }) =>
       ipcRenderer.invoke('history:update', data),
     delete: (id: string) =>
       ipcRenderer.invoke('history:delete', id),

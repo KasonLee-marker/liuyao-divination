@@ -148,7 +148,7 @@ function createWindow() {
   if (VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(VITE_DEV_SERVER_URL)
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, '../../../dist/index.html'))
   }
   
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

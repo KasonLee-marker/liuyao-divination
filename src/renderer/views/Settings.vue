@@ -105,17 +105,25 @@
               </div>
             </div>
 
-            <!-- 步骤2：启动服务（已安装但未运行时显示） -->
-            <div v-if="ollamaInstalled && !ollamaRunning" class="step">
-              <div class="step-num">2</div>
+            <!-- 步骤2：启动/停止服务 -->
+            <div v-if="ollamaInstalled" class="step">
+              <div class="step-num" :class="{ 'step-done': ollamaRunning }">
+                <span v-if="ollamaRunning">✓</span><span v-else>2</span>
+              </div>
               <div class="step-content">
-                <div class="step-title">启动 Ollama 服务</div>
+                <div class="step-title">Ollama 服务状态</div>
                 <div class="step-action">
-                  <el-button type="primary" @click="startOllamaService">
+                  <el-tag :type="ollamaRunning ? 'success' : 'info'" style="margin-right: 12px;">
+                    {{ ollamaRunning ? '运行中' : '未运行' }}
+                  </el-tag>
+                  <el-button v-if="!ollamaRunning" type="primary" @click="startOllamaService">
                     启动服务
                   </el-button>
+                  <el-button v-else type="danger" @click="stopOllamaService">
+                    停止服务
+                  </el-button>
                 </div>
-                <div class="step-hint">或手动在终端运行 <code>ollama serve</code></div>
+                <div class="step-hint">或手动在终端运行 <code>ollama serve</code> / <code>taskkill /F /IM ollama.exe</code></div>
               </div>
             </div>
 
@@ -446,6 +454,16 @@ async function installOllama() {
 
 async function startOllamaService() {
   const result = await window.electronAPI.ai.startOllama()
+  if (result.success) {
+    ElMessage.success(result.message)
+    await handleRecheckOllama()
+  } else {
+    ElMessage.error(result.message)
+  }
+}
+
+async function stopOllamaService() {
+  const result = await window.electronAPI.ai.stopOllama()
   if (result.success) {
     ElMessage.success(result.message)
     await handleRecheckOllama()

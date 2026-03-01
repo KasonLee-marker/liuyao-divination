@@ -127,6 +127,10 @@ declare global {
           success: boolean
           message: string
         }>
+        stopOllama: () => Promise<{
+          success: boolean
+          message: string
+        }>
         generate: (data: {
           settings: AISettings
           question: string | null

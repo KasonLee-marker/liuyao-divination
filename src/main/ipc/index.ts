@@ -3,7 +3,7 @@ import { join } from 'path'
 import fs from 'fs'
 import https from 'https'
 import http from 'http'
-import { exec, spawn } from 'child_process'
+import { exec, spawn, execSync } from 'child_process'
 import { promisify } from 'util'
 
 const execAsync = promisify(exec)
@@ -639,6 +639,31 @@ export function registerIpcHandlers(): void {
       }
     } catch (error) {
       return { success: false, message: `启动失败: ${error}` }
+    }
+  })
+
+  // 停止 Ollama 服务
+  ipcMain.handle('ai:stopOllama', async () => {
+    try {
+      // 检查是否在运行
+      const running = await checkOllamaRunning()
+      if (!running) {
+        return { success: true, message: 'Ollama 服务未运行' }
+      }
+
+      // 终止 ollama 进程
+      execSync('taskkill /F /IM ollama.exe', { encoding: 'utf-8' })
+
+      // 等待进程终止
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      const nowRunning = await checkOllamaRunning()
+      return {
+        success: !nowRunning,
+        message: nowRunning ? '停止服务失败' : 'Ollama 服务已停止'
+      }
+    } catch (error) {
+      return { success: false, message: `停止失败: ${error}` }
     }
   })
 

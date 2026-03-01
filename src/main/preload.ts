@@ -159,8 +159,8 @@ const electronAPI = {
       ipcRenderer.invoke('ai:checkOllama', url),
     checkOllamaInstalled: () =>
       ipcRenderer.invoke('ai:checkOllamaInstalled'),
-    startOllama: () =>
-      ipcRenderer.invoke('ai:startOllama'),
+    startOllama: () => ipcRenderer.invoke('ai:startOllama'),
+    stopOllama: () => ipcRenderer.invoke('ai:stopOllama'),
     generate: (data: {
       settings: {
         enabled: boolean

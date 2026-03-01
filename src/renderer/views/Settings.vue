@@ -436,8 +436,8 @@ async function startOllamaService() {
 
 async function restartApp() {
   try {
-    // 检测是否为开发模式
-    const isDev = import.meta.env.DEV
+    // 检测是否为开发模式（通过检测 Vite dev server）
+    const isDev = window.location.hostname === 'localhost' && window.location.port === '5173'
     const message = isDev 
       ? '安装完成！应用将关闭，请手动重新运行应用以检测 Ollama。'
       : '重启应用以检测 Ollama 安装状态，是否继续？'

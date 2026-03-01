@@ -481,7 +481,8 @@ async function pullModel() {
     if (result.success) {
       pullProgress.value = 100
       ElMessage.success('模型下载完成')
-      await checkOllama()
+      await settingsStore.checkOllama()
+      availableModels.value = settingsStore.availableModels
     } else {
       ElMessage.error(result.message || '模型下载失败')
     }

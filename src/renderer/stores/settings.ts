@@ -177,13 +177,6 @@ export const useSettingsStore = defineStore('settings', () => {
     window.electronAPI.ai.onModelPullProgress(progressCallback)
   }
 
-  function removeProgressListener() {
-    if (progressCallback) {
-      window.electronAPI.ai.removeModelPullProgressListener(progressCallback)
-      progressCallback = null
-    }
-  }
-
   async function pullModel(modelName: string): Promise<{ success: boolean; message: string }> {
     const existingModel = availableModels.value.find(m => m.name === modelName)
     if (existingModel) {
@@ -218,13 +211,6 @@ export const useSettingsStore = defineStore('settings', () => {
       ollamaDownloadProgress.value = data.progress
     }
     window.electronAPI.ai.onDownloadProgress(downloadCallback)
-  }
-
-  function removeDownloadListener() {
-    if (downloadCallback) {
-      window.electronAPI.ai.removeDownloadProgressListener(downloadCallback)
-      downloadCallback = null
-    }
   }
 
   async function downloadOllama(): Promise<{ success: boolean; message?: string; filePath?: string }> {

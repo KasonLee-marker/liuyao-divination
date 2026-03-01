@@ -978,33 +978,92 @@ export function registerIpcHandlers(): void {
         windowsHide: true
       })
 
-      let lastProgress = ''
+      let outputBuffer = ''
+      let totalBytes = 0
+      let completedBytes = 0
+
+      const stripAnsi = (str: string): string => {
+        return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+          .replace(/\x1b\][^\x07]*\x07/g, '')
+          .replace(/\[\?[0-9;]*[a-zA-Z]/g, '')
+          .replace(/\[\?[0-9]*h/g, '')
+          .replace(/\[\?[0-9]*l/g, '')
+          .replace(/\[K/g, '')
+          .replace(/\[A/g, '')
+          .replace(/\[1G/g, '')
+          .replace(/\[\?25[hl]/g, '')
+          .replace(/\[\?2026[hl]/g, '')
+          .replace(/\x1b\][^\n]*/g, '')
+      }
+
+      const sendProgress = (output: string, progress?: number) => {
+        const cleanOutput = stripAnsi(output).trim()
+        if (cleanOutput) {
+          event.sender.send('ai:modelPullProgress', { 
+            output: cleanOutput, 
+            progress: progress !== undefined ? progress : (totalBytes > 0 ? Math.round((completedBytes / totalBytes) * 100) : 0),
+            type: 'progress' 
+          })
+        }
+      }
 
       pullProcess.stdout.on('data', (data: Buffer) => {
         const output = data.toString()
-        event.sender.send('ai:modelPullProgress', { output, type: 'stdout' })
+        outputBuffer += output
         
-        // 解析进度信息
-        const progressMatch = output.match(/(\d+)%/g)
-        if (progressMatch) {
-          lastProgress = progressMatch[progressMatch.length - 1]
-          event.sender.send('ai:modelPullProgress', { 
-            output, 
-            progress: parseInt(lastProgress),
-            type: 'progress' 
-          })
+        const lines = output.split('\n').filter(line => line.trim())
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line)
+            if (json.status) {
+              const statusMsg = json.status
+              
+              if (json.total && json.completed) {
+                totalBytes = json.total
+                completedBytes = json.completed
+                const percent = Math.round((completedBytes / totalBytes) * 100)
+                sendProgress(`${statusMsg}: ${percent}%`, percent)
+              } else {
+                sendProgress(statusMsg)
+              }
+            }
+          } catch {
+            const cleanLine = stripAnsi(line).trim()
+            if (!cleanLine) continue
+            
+            const progressMatch = cleanLine.match(/(\d+)%/)
+            if (progressMatch) {
+              const progress = parseInt(progressMatch[1])
+              sendProgress(cleanLine, progress)
+            } else {
+              sendProgress(cleanLine)
+            }
+          }
         }
       })
 
       pullProcess.stderr.on('data', (data: Buffer) => {
-        event.sender.send('ai:modelPullProgress', { output: data.toString(), type: 'stderr' })
+        const output = stripAnsi(data.toString()).trim()
+        outputBuffer += output
+        if (output) {
+          event.sender.send('ai:modelPullProgress', { output, type: 'stderr' })
+        }
       })
 
       pullProcess.on('close', (code: number) => {
         if (code === 0) {
-          resolve({ success: true, message: '模型下载完成' })
+          if (outputBuffer.includes('success')) {
+            resolve({ success: true, message: '模型下载完成' })
+          } else if (outputBuffer.includes('already exist') || outputBuffer.includes('up to date')) {
+            resolve({ success: true, message: '模型已是最新版本' })
+          } else {
+            resolve({ success: true, message: '模型下载完成' })
+          }
         } else {
-          resolve({ success: false, message: `下载失败，退出码: ${code}` })
+          const errorMsg = outputBuffer.includes('error') 
+            ? outputBuffer.split('error')[1]?.slice(0, 100) || `下载失败，退出码: ${code}`
+            : `下载失败，退出码: ${code}`
+          resolve({ success: false, message: errorMsg.trim() })
         }
       })
 

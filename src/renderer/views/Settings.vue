@@ -66,13 +66,12 @@
       </div>
       
       <div v-else class="ai-settings-content">
-        <div v-if="!ollamaConnected" class="install-guide">
+        <div v-if="!ollamaInstalled" class="install-guide">
           <div class="install-header">
             <el-icon class="warning-icon"><WarningFilled /></el-icon>
-            <span>未检测到Ollama服务，请按以下步骤安装</span>
+            <span>未检测到Ollama，请按以下步骤安装</span>
           </div>
 
-          <!-- 步骤1：安装状态检测 -->
           <div class="install-steps">
             <div class="step">
               <div class="step-num" :class="{ 'step-done': ollamaInstalled }">
@@ -93,7 +92,6 @@
                 </div>
                 <el-progress v-if="downloading" :percentage="downloadProgress" :stroke-width="6" style="margin-top: 8px;" />
 
-                <!-- 下载完成后显示安装按钮 -->
                 <div v-if="downloadedFilePath && !ollamaInstalled" class="install-actions">
                   <el-button type="success" @click="installOllama" :loading="installing">
                     {{ installing ? '安装中...' : '开始安装' }}
@@ -105,7 +103,6 @@
               </div>
             </div>
 
-            <!-- 步骤2：启动服务（已安装但未运行时显示） -->
             <div v-if="ollamaInstalled && !ollamaRunning" class="step">
               <div class="step-num">2</div>
               <div class="step-content">
@@ -118,69 +115,11 @@
                 <div class="step-hint">或手动在终端运行 <code>ollama serve</code></div>
               </div>
             </div>
-
-            <!-- 步骤3：下载模型 -->
-            <div v-if="ollamaInstalled" class="step">
-              <div class="step-num" :class="{ 'step-done': availableModels.length > 0 }">
-                <span v-if="availableModels.length > 0">✓</span><span v-else>{{ ollamaRunning ? '2' : '3' }}</span>
-              </div>
-              <div class="step-content">
-                <div class="step-title">下载模型（国内用户推荐配置镜像）</div>
-                <div class="step-action">
-                  <el-select v-model="selectedMirror" placeholder="选择模型镜像源" style="width: 280px;">
-                    <el-option label="魔塔社区（推荐）" value="modelscope" />
-                    <el-option label="HF国内镜像" value="hf-mirror" />
-                    <el-option label="DaoCloud镜像" value="daocloud" />
-                    <el-option label="默认（国外）" value="" />
-                  </el-select>
-                </div>
-                <div class="step-hint">选择镜像源后复制下方命令，在终端执行即可加速下载</div>
-              </div>
-            </div>
-
-            <!-- 步骤4：模型下载命令 -->
-            <div v-if="ollamaInstalled && ollamaRunning" class="step">
-              <div class="step-num" :class="{ 'step-done': availableModels.length > 0 }">
-                <span v-if="availableModels.length > 0">✓</span><span v-else>3</span>
-              </div>
-              <div class="step-content">
-                <div class="step-title">{{ availableModels.length > 0 ? '已安装模型' : '下载模型' }}</div>
-                <div v-if="availableModels.length === 0" class="step-action">
-                  <el-button type="primary" @click="pullModel" :loading="pullingModel" style="margin-bottom: 12px;">
-                    一键下载推荐模型
-                  </el-button>
-                  <div v-if="pullProgress > 0" style="margin-bottom: 12px;">
-                    <el-progress :percentage="pullProgress" :status="pullProgress === 100 ? 'success' : ''" />
-                    <div class="pull-output">{{ pullOutput }}</div>
-                  </div>
-                  <div class="step-hint" style="margin-bottom: 8px;">或手动下载其他模型：</div>
-                  <el-select v-model="selectedMirror" placeholder="选择模型镜像源" style="width: 280px; margin-bottom: 8px;">
-                    <el-option label="魔塔社区（推荐）" value="modelscope" />
-                    <el-option label="HF国内镜像" value="hf-mirror" />
-                    <el-option label="DaoCloud镜像" value="daocloud" />
-                    <el-option label="默认（国外）" value="" />
-                  </el-select>
-                  <code class="command-code">{{ modelCommand }}</code>
-                  <el-button type="success" size="small" @click="copyCommand(modelCommand)">
-                    复制
-                  </el-button>
-                </div>
-                <div v-else class="installed-models">
-                  <el-tag v-for="model in availableModels" :key="model.name" style="margin-right: 8px;">
-                    {{ model.name }}
-                  </el-tag>
-                </div>
-                <div class="step-hint">推荐模型：huihui_ai/gemma3-abliterated:latest</div>
-              </div>
-            </div>
           </div>
 
           <div class="install-footer">
             <div class="requirements">
               <span>最低配置：8GB内存 · 10GB磁盘</span>
-              <span v-if="ollamaInstalled" style="margin-left: 16px; color: var(--el-color-success);">
-                ✓ Ollama已安装
-              </span>
             </div>
             <el-button type="primary" @click="handleRecheckOllama" :loading="checkingOllama">
               重新检测
@@ -189,29 +128,9 @@
         </div>
         
         <el-form v-else label-width="100px" class="ai-form">
-          <div v-if="availableModels.length === 0" class="no-models-hint">
-            <el-icon><WarningFilled /></el-icon>
-            <span>Ollama 已连接，但未检测到模型</span>
-          </div>
-          <div v-if="availableModels.length === 0" class="model-download-guide">
-            <div class="guide-title">请下载模型后使用：</div>
-            <div class="guide-action">
-              <el-select v-model="selectedMirror" placeholder="选择镜像源" style="width: 200px;">
-                <el-option label="魔塔社区（推荐）" value="modelscope" />
-                <el-option label="HF国内镜像" value="hf-mirror" />
-                <el-option label="DaoCloud镜像" value="daocloud" />
-                <el-option label="默认（国外）" value="" />
-              </el-select>
-              <code class="command-code">{{ modelCommand }}</code>
-              <el-button type="success" size="small" @click="copyCommand(modelCommand)">
-                复制命令
-              </el-button>
-            </div>
-            <div class="guide-hint">复制命令后在终端执行，模型大小约4.7GB</div>
-          </div>
-          <el-form-item label="服务地址">
+          <el-form-item label="服务状态">
             <div class="service-row">
-              <el-input v-model="aiOllamaUrl" @blur="handleAIOllamaUrlChange" placeholder="http://localhost:11434" style="flex: 1;" />
+              <el-input v-model="aiOllamaUrl" @blur="handleAIOllamaUrlChange" placeholder="http://localhost:11434" style="flex: 1;" disabled />
               <el-tag v-if="ollamaRunning" type="success" size="small" style="margin: 0 8px;">运行中</el-tag>
               <el-tag v-else type="info" size="small" style="margin: 0 8px;">未运行</el-tag>
               <el-button v-if="ollamaRunning" type="danger" size="small" @click="stopOllamaService">
@@ -223,10 +142,61 @@
             </div>
             <div class="form-hint">Ollama 默认地址，通常无需修改</div>
           </el-form-item>
-          <el-form-item label="AI模型">
+          
+          <el-form-item label="模型管理">
+            <div class="model-section">
+              <div v-if="availableModels.length > 0" class="installed-models-list">
+                <div class="model-list-header">已安装模型：</div>
+                <el-tag v-for="model in availableModels" :key="model.name" 
+                  :type="aiModel === model.name ? 'success' : 'info'"
+                  style="margin-right: 8px; margin-bottom: 8px; cursor: pointer;"
+                  @click="aiModel = model.name; handleAIModelChange(model.name)">
+                  {{ model.name }}
+                </el-tag>
+              </div>
+              
+              <div class="model-download-section">
+                <div class="model-list-header">下载新模型：</div>
+                <div class="model-download-actions">
+                  <el-button type="primary" @click="pullModel" :loading="pullingModel">
+                    一键下载推荐模型
+                  </el-button>
+                  <span class="model-hint">推荐：huihui_ai/gemma3-abliterated:latest</span>
+                </div>
+                <div v-if="pullingModel" class="pull-progress">
+                  <el-progress 
+                    :percentage="pullProgress" 
+                    :status="pullProgress === 100 ? 'success' : ''"
+                    :indeterminate="pullProgress === 0"
+                  />
+                  <div class="pull-output" v-if="pullOutput">{{ pullOutput }}</div>
+                </div>
+                
+                <div class="manual-download">
+                  <div class="manual-download-title">或手动下载（国内镜像加速）：</div>
+                  <div class="manual-download-row">
+                    <el-select v-model="selectedMirror" placeholder="选择镜像源" style="width: 180px;">
+                      <el-option label="魔塔社区（推荐）" value="modelscope" />
+                      <el-option label="HF国内镜像" value="hf-mirror" />
+                      <el-option label="DaoCloud镜像" value="daocloud" />
+                      <el-option label="默认（国外）" value="" />
+                    </el-select>
+                    <code class="command-code">{{ modelCommand }}</code>
+                    <el-button type="success" size="small" @click="copyCommand(modelCommand)">
+                      复制命令
+                    </el-button>
+                  </div>
+                  <div class="form-hint">复制命令后在终端执行</div>
+                </div>
+              </div>
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="当前模型">
             <el-select v-model="aiModel" @change="handleAIModelChange" placeholder="请选择模型" style="width: 100%;">
               <el-option v-for="model in availableModels" :key="model.name" :value="model.name" :label="model.name" />
             </el-select>
+            <div class="form-hint" v-if="availableModels.length === 0">请先下载模型</div>
           </el-form-item>
           <el-form-item label="创造性">
             <div class="slider-row">
@@ -483,33 +453,43 @@ function copyCommand(command: string) {
 }
 
 async function pullModel() {
+  const modelName = 'huihui_ai/gemma3-abliterated:latest'
+  
+  const existingModel = availableModels.value.find(m => m.name === modelName)
+  if (existingModel) {
+    ElMessage.info('该模型已安装')
+    return
+  }
+  
   pullingModel.value = true
   pullProgress.value = 0
   pullOutput.value = '正在下载模型...'
   
-  const modelName = 'huihui_ai/gemma3-abliterated:latest'
-  
-  window.electronAPI.ai.onModelPullProgress((_event, data) => {
+  const onProgress = (_event: unknown, data: { progress?: number; output?: string; type?: string }) => {
     if (data.progress !== undefined) {
       pullProgress.value = data.progress
     }
     if (data.output) {
       pullOutput.value = data.output
     }
-  })
+  }
+  
+  window.electronAPI.ai.onModelPullProgress(onProgress)
   
   try {
     const result = await window.electronAPI.ai.pullModel(modelName)
     if (result.success) {
+      pullProgress.value = 100
       ElMessage.success('模型下载完成')
       await checkOllama()
     } else {
-      ElMessage.error(result.message)
+      ElMessage.error(result.message || '模型下载失败')
     }
   } catch (error) {
-    ElMessage.error('模型下载失败')
+    const errMsg = error instanceof Error ? error.message : '模型下载失败'
+    ElMessage.error(errMsg)
   } finally {
-    window.electronAPI.ai.removeModelPullProgressListener(() => {})
+    window.electronAPI.ai.removeModelPullProgressListener(onProgress)
     pullingModel.value = false
   }
 }
@@ -742,23 +722,71 @@ onMounted(async () => {
   margin-top: 4px;
 }
 
-.no-models-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: var(--el-color-warning-light-9);
-  border-radius: 6px;
-  margin-bottom: 16px;
-  color: var(--el-color-warning-dark-2);
-  font-size: 14px;
+.model-section {
+  width: 100%;
 }
 
-.model-download-guide {
+.installed-models-list {
+  margin-bottom: 16px;
+}
+
+.model-list-header {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  margin-bottom: 8px;
+}
+
+.model-download-section {
   background: var(--el-fill-color-light);
   border-radius: 8px;
   padding: 16px;
-  margin-bottom: 16px;
+}
+
+.model-download-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.model-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.pull-progress {
+  margin-bottom: 12px;
+}
+
+.pull-output {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 8px;
+  max-height: 100px;
+  overflow-y: auto;
+  font-family: monospace;
+  background: var(--el-fill-color);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.manual-download {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.manual-download-title {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  margin-bottom: 8px;
+}
+
+.manual-download-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .guide-title {

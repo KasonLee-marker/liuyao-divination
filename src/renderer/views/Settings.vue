@@ -105,25 +105,17 @@
               </div>
             </div>
 
-            <!-- 步骤2：启动/停止服务 -->
-            <div v-if="ollamaInstalled" class="step">
-              <div class="step-num" :class="{ 'step-done': ollamaRunning }">
-                <span v-if="ollamaRunning">✓</span><span v-else>2</span>
-              </div>
+            <!-- 步骤2：启动服务（已安装但未运行时显示） -->
+            <div v-if="ollamaInstalled && !ollamaRunning" class="step">
+              <div class="step-num">2</div>
               <div class="step-content">
-                <div class="step-title">Ollama 服务状态</div>
+                <div class="step-title">启动 Ollama 服务</div>
                 <div class="step-action">
-                  <el-tag :type="ollamaRunning ? 'success' : 'info'" style="margin-right: 12px;">
-                    {{ ollamaRunning ? '运行中' : '未运行' }}
-                  </el-tag>
-                  <el-button v-if="!ollamaRunning" type="primary" @click="startOllamaService">
+                  <el-button type="primary" @click="startOllamaService">
                     启动服务
                   </el-button>
-                  <el-button v-else type="danger" @click="stopOllamaService">
-                    停止服务
-                  </el-button>
                 </div>
-                <div class="step-hint">或手动在终端运行 <code>ollama serve</code> / <code>taskkill /F /IM ollama.exe</code></div>
+                <div class="step-hint">或手动在终端运行 <code>ollama serve</code></div>
               </div>
             </div>
 
@@ -218,7 +210,17 @@
             <div class="guide-hint">复制命令后在终端执行，模型大小约4.7GB</div>
           </div>
           <el-form-item label="服务地址">
-            <el-input v-model="aiOllamaUrl" @blur="handleAIOllamaUrlChange" placeholder="http://localhost:11434" />
+            <div class="service-row">
+              <el-input v-model="aiOllamaUrl" @blur="handleAIOllamaUrlChange" placeholder="http://localhost:11434" style="flex: 1;" />
+              <el-tag v-if="ollamaRunning" type="success" size="small" style="margin: 0 8px;">运行中</el-tag>
+              <el-tag v-else type="info" size="small" style="margin: 0 8px;">未运行</el-tag>
+              <el-button v-if="ollamaRunning" type="danger" size="small" @click="stopOllamaService">
+                停止服务
+              </el-button>
+              <el-button v-else type="primary" size="small" @click="startOllamaService">
+                启动服务
+              </el-button>
+            </div>
             <div class="form-hint">Ollama 默认地址，通常无需修改</div>
           </el-form-item>
           <el-form-item label="AI模型">
@@ -696,6 +698,11 @@ onMounted(async () => {
 
 .ai-form {
   padding: 8px 0;
+}
+
+.service-row {
+  display: flex;
+  align-items: center;
 }
 
 .slider-row {

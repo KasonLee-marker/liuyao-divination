@@ -1,6 +1,6 @@
 {
   "name": "liuyao-divination",
-  "version": "1.0.0",
+  "version": "1.2.4",
   "description": "A desktop application for Liu Yao (Six Lines) divination prediction",
   "main": "dist-electron/src/main/index.js",
   "scripts": {

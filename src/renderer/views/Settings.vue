@@ -121,9 +121,12 @@
             <div class="requirements">
               <span>最低配置：8GB内存 · 10GB磁盘</span>
             </div>
-            <el-button type="primary" @click="handleRecheckOllama" :loading="checkingOllama">
-              重新检测
-            </el-button>
+            <div class="footer-actions">
+              <el-button type="success" @click="restartApp" size="large">
+                <el-icon><Refresh /></el-icon>
+                安装完成后重启应用
+              </el-button>
+            </div>
           </div>
         </div>
         
@@ -142,7 +145,7 @@
             </div>
             <div class="form-hint">Ollama 默认地址，通常无需修改</div>
           </el-form-item>
-          
+
           <el-form-item label="模型管理">
             <div class="model-section">
               <div v-if="availableModels.length > 0" class="installed-models-list">
@@ -157,8 +160,16 @@
               
               <div class="model-download-section">
                 <div class="model-list-header">下载新模型：</div>
+                <div v-if="!ollamaRunning" class="service-warning">
+                  <el-icon><WarningFilled /></el-icon>
+                  <span>请先启动 Ollama 服务后再下载模型</span>
+                </div>
                 <div class="model-download-actions">
-                  <el-button type="primary" @click="pullModel" :loading="pullingModel">
+                  <el-select v-model="selectedPullMirror" placeholder="选择镜像源" style="width: 150px;">
+                    <el-option label="魔塔社区（推荐）" value="modelscope" />
+                    <el-option label="官方源" value="" />
+                  </el-select>
+                  <el-button type="primary" @click="pullModel" :loading="pullingModel" :disabled="!ollamaRunning">
                     一键下载推荐模型
                   </el-button>
                   <span class="model-hint">推荐：huihui_ai/gemma3-abliterated:latest</span>
@@ -173,7 +184,7 @@
                 </div>
                 
                 <div class="manual-download">
-                  <div class="manual-download-title">或手动下载（国内镜像加速）：</div>
+                  <div class="manual-download-title">下载其他模型：</div>
                   <div class="manual-download-row">
                     <el-select v-model="selectedMirror" placeholder="选择镜像源" style="width: 180px;">
                       <el-option label="魔塔社区（推荐）" value="modelscope" />
@@ -242,7 +253,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { InfoFilled, WarningFilled, Download } from '@element-plus/icons-vue'
+import { InfoFilled, WarningFilled, Download, Refresh } from '@element-plus/icons-vue'
 import { useSettingsStore } from '../stores/settings'
 import { useHistoryStore } from '../stores/history'
 
@@ -266,6 +277,7 @@ const checkingOllama = ref(false)
 const ollamaConnected = ref(false)
 const availableModels = ref<{name: string}[]>([])
 const selectedMirror = ref('modelscope')
+const selectedPullMirror = ref('modelscope')
 const installing = ref(false)
 const ollamaInstalled = ref(false)
 const ollamaVersion = ref('')
@@ -395,9 +407,13 @@ async function installOllama() {
     const result = await window.electronAPI.ai.installOllama(filePath)
 
     if (result.success) {
-      ElMessage.success('安装成功！请重启应用后使用')
+      ElMessage.success('安装成功！')
       // 重新检测
       await handleRecheckOllama()
+      // 如果检测到安装成功，提示用户
+      if (ollamaInstalled.value) {
+        ElMessage.success('Ollama 已就绪，可以开始配置 AI')
+      }
     } else {
       ElMessage.error(result.message)
     }
@@ -415,6 +431,25 @@ async function startOllamaService() {
     await handleRecheckOllama()
   } else {
     ElMessage.error(result.message)
+  }
+}
+
+async function restartApp() {
+  try {
+    // 检测是否为开发模式
+    const isDev = import.meta.env.DEV
+    const message = isDev 
+      ? '安装完成！应用将关闭，请手动重新运行应用以检测 Ollama。'
+      : '重启应用以检测 Ollama 安装状态，是否继续？'
+    
+    await ElMessageBox.confirm(message, '提示', {
+      confirmButtonText: isDev ? '关闭应用' : '重启',
+      cancelButtonText: '取消',
+      type: 'info'
+    })
+    await window.electronAPI.window.restart()
+  } catch {
+    // 用户取消
   }
 }
 
@@ -437,9 +472,16 @@ function copyCommand(command: string) {
 }
 
 async function pullModel() {
+  // 先检测 Ollama 服务是否在运行
+  if (!ollamaRunning.value) {
+    ElMessage.warning('请先启动 Ollama 服务后再下载模型')
+    return
+  }
+
   const modelName = 'huihui_ai/gemma3-abliterated:latest'
-  
-  const result = await settingsStore.pullModel(modelName)
+  const mirrorUrl = selectedPullMirror.value || undefined
+
+  const result = await settingsStore.pullModel(modelName, mirrorUrl)
   if (result.success) {
     if (result.message === '该模型已安装') {
       ElMessage.info(result.message)
@@ -651,6 +693,11 @@ onMounted(async () => {
   color: var(--el-text-color-secondary);
 }
 
+.footer-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .ai-form {
   padding: 8px 0;
 }
@@ -715,6 +762,18 @@ onMounted(async () => {
   background: var(--el-fill-color-light);
   border-radius: 8px;
   padding: 16px;
+}
+
+.service-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--el-color-warning-light-9);
+  border-radius: 4px;
+  color: var(--el-color-warning);
+  font-size: 13px;
+  margin-bottom: 12px;
 }
 
 .model-download-actions {

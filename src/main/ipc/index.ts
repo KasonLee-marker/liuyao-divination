@@ -55,7 +55,6 @@ async function checkOllamaInstalled(): Promise<{ installed: boolean; version?: s
     const { stdout } = await execAsync('where ollama', { timeout: 5000 })
     const ollamaPath = stdout.trim().split('\n')[0]
 
-    // 尝试获取版本
     try {
       const { stdout: versionOut } = await execAsync('ollama --version', { timeout: 5000 })
       const versionMatch = versionOut.match(/version[:\s]+([\d.]+)/i)
@@ -212,6 +211,19 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('window:close', () => {
     const win = BrowserWindow.getFocusedWindow()
     win?.close()
+    return { success: true }
+  })
+
+  ipcMain.handle('window:restart', () => {
+    const devServerUrl = process.env.VITE_DEV_SERVER_URL
+    if (devServerUrl) {
+      // 开发模式：直接退出，用户需要手动重新运行 npm run dev:full
+      app.exit(0)
+    } else {
+      // 生产模式：正常重启
+      app.relaunch()
+      app.exit(0)
+    }
     return { success: true }
   })
 
@@ -977,10 +989,43 @@ export function registerIpcHandlers(): void {
   })
 
   // 拉取模型（带进度）
-  ipcMain.handle('ai:pullModel', async (event, modelName: string) => {
+  ipcMain.handle('ai:pullModel', async (event, modelName: string, mirrorUrl?: string) => {
     return new Promise((resolve) => {
-      const pullProcess = spawn('ollama', ['pull', modelName], {
-        windowsHide: true
+      // 镜像源设置
+      // mirrorUrl 可以是:
+      // - 'modelscope' -> 使用魔塔社区镜像 (modelscope.cn)
+      // - 'daocloud' -> 使用 DaoCloud 镜像 (ollama.m.daocloud.io)
+      // - '' 或 undefined -> 不使用镜像，直接从官方下载
+      // - 自定义地址 -> 使用自定义镜像
+
+      let actualModelName = modelName
+      let mirrorLabel = ''
+
+      if (mirrorUrl === 'modelscope') {
+        // 魔塔社区镜像 - 格式: modelscope.cn/{命名空间}/{模型名}
+        // 例如: modelscope.cn/Qwen/Qwen2.5-7B-Instruct-GGUF
+        actualModelName = `modelscope.cn/${modelName}`
+        mirrorLabel = '魔塔社区镜像'
+      } else if (mirrorUrl === 'daocloud') {
+        // DaoCloud 镜像 - 直接在模型名前加前缀
+        actualModelName = `ollama.m.daocloud.io/${modelName}`
+        mirrorLabel = 'DaoCloud镜像'
+      } else if (mirrorUrl && mirrorUrl !== '') {
+        // 自定义镜像
+        actualModelName = `${mirrorUrl}/${modelName}`
+        mirrorLabel = mirrorUrl
+      }
+
+      console.log(`[AI] Pulling model: ${actualModelName}${mirrorLabel ? ` (via ${mirrorLabel})` : ' (官方源)'}`)
+
+      const env = {
+        ...process.env,
+        OLLAMA_ORIGINS: '*', // 允许跨域请求
+      }
+
+      const pullProcess = spawn('ollama', ['pull', actualModelName], {
+        windowsHide: true,
+        env
       })
 
       let outputBuffer = ''

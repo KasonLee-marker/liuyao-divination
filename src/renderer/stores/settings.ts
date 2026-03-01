@@ -177,20 +177,27 @@ export const useSettingsStore = defineStore('settings', () => {
     window.electronAPI.ai.onModelPullProgress(progressCallback)
   }
 
-  async function pullModel(modelName: string): Promise<{ success: boolean; message: string }> {
+  async function pullModel(modelName: string, mirrorUrl?: string): Promise<{ success: boolean; message: string }> {
     const existingModel = availableModels.value.find(m => m.name === modelName)
     if (existingModel) {
       return { success: true, message: '该模型已安装' }
     }
-    
+
     modelPulling.value = true
     modelPullProgress.value = 0
-    modelPullOutput.value = '正在下载模型...'
-    
+
+    let statusMsg = '正在下载模型...'
+    if (mirrorUrl === 'modelscope') {
+      statusMsg = '正在通过魔塔社区镜像下载模型...'
+    } else if (mirrorUrl === 'daocloud') {
+      statusMsg = '正在通过 DaoCloud 镜像下载模型...'
+    }
+    modelPullOutput.value = statusMsg
+
     setupProgressListener()
-    
+
     try {
-      const result = await window.electronAPI.ai.pullModel(modelName)
+      const result = await window.electronAPI.ai.pullModel(modelName, mirrorUrl)
       if (result.success) {
         modelPullProgress.value = 100
         await checkOllama()

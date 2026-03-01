@@ -81,6 +81,8 @@ const electronAPI = {
       ipcRenderer.invoke('window:close'),
     isMaximized: () =>
       ipcRenderer.invoke('window:isMaximized'),
+    restart: () =>
+      ipcRenderer.invoke('window:restart'),
     onWindowMaximized: (callback: (_event: unknown, isMaximized: boolean) => void) => {
       ipcRenderer.on('window-maximized', callback)
     },
@@ -234,8 +236,8 @@ const electronAPI = {
     },
     openDownloadPage: (useMirror: boolean) =>
       ipcRenderer.invoke('ai:openDownloadPage', useMirror),
-    pullModel: (modelName: string) =>
-      ipcRenderer.invoke('ai:pullModel', modelName),
+    pullModel: (modelName: string, mirrorUrl?: string) =>
+      ipcRenderer.invoke('ai:pullModel', modelName, mirrorUrl),
     onModelPullProgress: (callback: (_event: unknown, data: { output: string; progress?: number; type: string }) => void) => {
       ipcRenderer.on('ai:modelPullProgress', callback)
     },

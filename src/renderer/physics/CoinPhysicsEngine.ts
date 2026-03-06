@@ -99,7 +99,6 @@ export class CoinPhysicsEngine {
 
     // 启动物理引擎
     this.runner = Matter.Runner.create({
-      isFixed: false,
       delta: 1000 / 60
     })
     Matter.Runner.run(this.runner, this.engine)
@@ -116,7 +115,6 @@ export class CoinPhysicsEngine {
     if (!this.world) return
 
     const { containerWidth, containerHeight } = this.options
-    const padding = 30
 
     const wallOptions = {
       isStatic: true,
@@ -125,8 +123,6 @@ export class CoinPhysicsEngine {
       restitution: 0.5
     }
 
-    // 简化的矩形边界 - 给硬币更多空间，避免卡在底部
-    const margin = 50  // 增加边距
     const wallThickness = 20
 
     // 上边界
@@ -835,7 +831,7 @@ export class CoinPhysicsEngine {
   }
 
   reset(): void {
-    const { containerWidth, containerHeight, coinRadius } = this.options
+    const { containerWidth, containerHeight } = this.options
     const centerX = containerWidth / 2
     const centerY = containerHeight / 2
 

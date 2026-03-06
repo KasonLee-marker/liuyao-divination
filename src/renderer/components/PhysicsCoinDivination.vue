@@ -198,7 +198,7 @@ function tossCoin() {
   const centerX = canvasWidth / 2
   const centerY = canvasHeight / 2
 
-  coins.forEach((coin, i) => {
+  coins.forEach((coin) => {
     // 随机决定最终正反
     coin.finalHeads = Math.random() > 0.5
 
